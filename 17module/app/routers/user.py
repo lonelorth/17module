@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from app.backend.db_depends import get_db
 from typing import Annotated
-from app.models import User
+from app.models import User, Task
 from app.schemas import CreateUser, UpdateUser
 from sqlalchemy import insert, select, update, delete
 from slugify import slugify
@@ -60,9 +60,21 @@ async def delete_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
     query = select(User).where(User.id == user_id)
     user = db.scalar(query)
     if user:
+        db.execute(delete(Task).where(Task.user_id == user_id))
         db.execute(delete(User).where(User.id == user_id))
         db.commit()
-        return {"status_code": status.HTTP_200_OK, "transaction": "User deletion successful!"}
+        return {"status_code": status.HTTP_200_OK,
+                "transaction": "User and associated tasks were successfully deleted!"}
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="User was not found")
+
+
+@router.get("/{user_id}/tasks")
+async def tasks_by_user_id(user_id: int, db: Annotated[Session, Depends(get_db)]):
+    tasks = db.scalars(select(Task).where(Task.user_id == user_id)).all()
+    if tasks is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No tasks found for this user")
+    return tasks
